@@ -6,17 +6,21 @@ Tests an AlphaZero checkpoint against Stockfish at various skill levels
 to estimate the model's ELO rating.
 
 Usage:
-    python test_elo.py --checkpoint checkpoints/model_final.pt --simulations 400 --skill-level 5
-    python test_elo.py --checkpoint checkpoints/model_final.pt --simulations 800 --skill-level 10 --num-games 100
+    python tests/test_elo.py --checkpoint checkpoints/model_final.pt --simulations 400 --skill-level 5
+    python tests/test_elo.py --checkpoint checkpoints/model_final.pt --simulations 800 --skill-level 10 --num-games 100
 """
 
 import argparse
+import sys
 import chess
 import chess.engine
 import torch
 import numpy as np
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from engine.model import AlphaZeroNetwork
 from engine.board_encoder import BoardEncoder
 from engine.action_converter import ActionConverter

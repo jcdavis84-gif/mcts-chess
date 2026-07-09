@@ -75,7 +75,7 @@ python train.py --load-buffer top_players_train.pkl --cycles 10 --train-steps-pe
 Test a checkpoint in a head-to-head game against Stockfish:
 
 ```bash
-PYTHONPATH=. python tests/test_elo.py --checkpoint checkpoints/model_final.pt --simulations 10000 --skill-level 1 --num-games 1
+python tests/test_elo.py --checkpoint checkpoints/model_final.pt --simulations 10000 --skill-level 1 --num-games 1
 ```
 
 Play a game against a checkpoint in the browser (human vs. network):
