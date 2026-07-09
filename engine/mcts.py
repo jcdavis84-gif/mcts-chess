@@ -1,8 +1,8 @@
 import chess
 import numpy as np
 from typing import Optional, Dict, List
-from board_encoder import BoardEncoder
-from action_converter import ActionConverter
+from .board_encoder import BoardEncoder
+from .action_converter import ActionConverter
 
 
 class MCTSNode:

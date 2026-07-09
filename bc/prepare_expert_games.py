@@ -48,9 +48,9 @@ import os
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from board_encoder import BoardEncoder, calculate_material_balance
-from action_converter import ActionConverter
-from replay_buffer import ReplayBuffer
+from engine.board_encoder import BoardEncoder, calculate_material_balance
+from engine.action_converter import ActionConverter
+from engine.replay_buffer import ReplayBuffer
 
 
 def download_pgnmentor_games(player_name: str):

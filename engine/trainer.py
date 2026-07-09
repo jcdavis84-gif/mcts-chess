@@ -6,11 +6,11 @@ import time
 import copy
 from pathlib import Path
 from typing import Dict
-from model import AlphaZeroNetwork
-from replay_buffer import ReplayBuffer
-from self_play import play_games
-from board_encoder import BoardEncoder
-from action_converter import ActionConverter
+from .model import AlphaZeroNetwork
+from .replay_buffer import ReplayBuffer
+from .self_play import play_games
+from .board_encoder import BoardEncoder
+from .action_converter import ActionConverter
 
 
 class AlphaZeroTrainer:

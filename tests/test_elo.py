@@ -17,10 +17,10 @@ import torch
 import numpy as np
 import time
 from pathlib import Path
-from model import AlphaZeroNetwork
-from board_encoder import BoardEncoder
-from action_converter import ActionConverter
-from mcts import MCTS
+from engine.model import AlphaZeroNetwork
+from engine.board_encoder import BoardEncoder
+from engine.action_converter import ActionConverter
+from engine.mcts import MCTS
 
 
 # Stockfish skill level to approximate ELO mapping

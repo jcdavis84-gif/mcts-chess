@@ -34,7 +34,7 @@ import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from model import AlphaZeroNetwork
+from engine.model import AlphaZeroNetwork
 
 
 def load_checkpoint(path, device="cpu"):

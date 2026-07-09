@@ -27,10 +27,10 @@ import chess
 import numpy as np
 import torch
 
-from action_converter import ActionConverter
-from board_encoder import BoardEncoder
-from mcts import MCTS
-from model import AlphaZeroNetwork
+from engine.action_converter import ActionConverter
+from engine.board_encoder import BoardEncoder
+from engine.mcts import MCTS
+from engine.model import AlphaZeroNetwork
 
 
 def load_model(checkpoint_path: str, device: str) -> AlphaZeroNetwork:

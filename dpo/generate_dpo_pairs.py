@@ -38,9 +38,9 @@ from tqdm import tqdm
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from model import AlphaZeroNetwork
-from board_encoder import BoardEncoder
-from action_converter import ActionConverter
+from engine.model import AlphaZeroNetwork
+from engine.board_encoder import BoardEncoder
+from engine.action_converter import ActionConverter
 
 
 class StockfishEvaluator:

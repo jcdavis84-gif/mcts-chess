@@ -24,11 +24,11 @@ from pathlib import Path
 
 import wandb
 
-from model import AlphaZeroNetwork
-from board_encoder import BoardEncoder
-from action_converter import ActionConverter
-from replay_buffer import ReplayBuffer
-from trainer import AlphaZeroTrainer
+from engine.model import AlphaZeroNetwork
+from engine.board_encoder import BoardEncoder
+from engine.action_converter import ActionConverter
+from engine.replay_buffer import ReplayBuffer
+from engine.trainer import AlphaZeroTrainer
 
 
 
@@ -275,7 +275,7 @@ def main():
 
         # Estimate workers if auto-detect
         if args.num_workers is None:
-            from self_play import _estimate_safe_workers
+            from engine.self_play import _estimate_safe_workers
             estimated_workers = _estimate_safe_workers(model, None, device)
             print(f"Self-play workers: {estimated_workers} (auto-detected)")
         elif args.num_workers == 1:

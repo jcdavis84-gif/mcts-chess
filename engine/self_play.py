@@ -3,9 +3,9 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 from typing import List, Tuple, Optional, Dict
-from board_encoder import BoardEncoder, calculate_material_balance
-from action_converter import ActionConverter
-from mcts import MCTS
+from .board_encoder import BoardEncoder, calculate_material_balance
+from .action_converter import ActionConverter
+from .mcts import MCTS
 
 
 class SelfPlayGame:
@@ -210,7 +210,7 @@ def _play_single_game_worker(args):
 
     try:
         # Import here to avoid issues with multiprocessing
-        from model import AlphaZeroNetwork
+        from .model import AlphaZeroNetwork
 
         # Recreate model in this process
         model = AlphaZeroNetwork(
