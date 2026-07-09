@@ -653,9 +653,6 @@ PGN Sources:
     print(f"      --batch-size 256 \\")
     print(f"      --learning-rate 1e-3")
     print()
-    print(f"Evaluate on held-out data:")
-    print(f"  python evaluate.py --checkpoint model.pt --eval-buffer {eval_path}")
-    print()
     print("=" * 80)
 
 
