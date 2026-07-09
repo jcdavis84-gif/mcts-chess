@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Play vs Checkpoint</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    margin: 0;
+    background: #f4f1ea;
+    color: #333;
+  }
+  .wrap {
+    display: flex;
+    gap: 28px;
+    max-width: 900px;
+    margin: 32px auto;
+    padding: 0 16px;
+    flex-wrap: wrap;
+  }
+  #board { width: 480px; }
+  .sidebar { flex: 1; min-width: 260px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .checkpoint-name {
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 12px;
+    color: #777;
+    margin-bottom: 16px;
+    word-break: break-all;
+  }
+  .panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  .panel h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #999;
+    margin: 0 0 8px;
+  }
+  #status { font-size: 15px; font-weight: 600; }
+  #status.thinking { color: #b07d2b; }
+  #status.gameover { color: #b03030; }
+  #eval { font-size: 13px; color: #555; line-height: 1.6; }
+  #moves {
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  #moves .num { color: #999; margin-right: 4px; }
+  #moves span.mv { margin-right: 10px; }
+  .controls { display: flex; gap: 10px; align-items: center; }
+  select, button {
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #bbb;
+    background: #fff;
+    cursor: pointer;
+  }
+  button.primary { background: #2c6e49; color: #fff; border-color: #2c6e49; }
+  button.primary:hover { background: #245c3d; }
+  #error { color: #b03030; font-size: 13px; margin-top: 8px; white-space: pre-wrap; }
+  .highlight-last { box-shadow: inset 0 0 0 3px rgba(255, 200, 0, 0.7); }
+  .hint { font-size: 11px; color: #999; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div id="board"></div>
+  </div>
+  <div class="sidebar">
+    <h1>Play vs Checkpoint</h1>
+    <div class="checkpoint-name" id="checkpoint-name">loading…</div>
+
+    <div class="panel">
+      <div class="controls">
+        <label for="color-select">You play</label>
+        <select id="color-select">
+          <option value="white">White</option>
+          <option value="black">Black</option>
+        </select>
+        <button class="primary" id="new-game">New game</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Status</h2>
+      <div id="status">–</div>
+      <div id="error"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Model eval</h2>
+      <div id="eval">No moves yet.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Moves</h2>
+      <div id="moves">–</div>
+    </div>
+
+    <div class="hint">Pawn promotions are always to a queen. Drag and drop to move.</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+var game = new Chess();
+var board = null;
+var thinking = false;
+
+function userColor() {
+  return document.getElementById('color-select').value;
+}
+
+function modelTurn() {
+  var turn = game.turn() === 'w' ? 'white' : 'black';
+  return turn !== userColor();
+}
+
+function setStatus() {
+  var el = document.getElementById('status');
+  el.className = '';
+  if (game.in_checkmate()) {
+    var winner = game.turn() === 'w' ? 'Black' : 'White';
+    el.textContent = 'Checkmate — ' + winner + ' wins';
+    el.className = 'gameover';
+  } else if (game.in_stalemate()) {
+    el.textContent = 'Draw — stalemate';
+    el.className = 'gameover';
+  } else if (game.in_threefold_repetition()) {
+    el.textContent = 'Draw — threefold repetition';
+    el.className = 'gameover';
+  } else if (game.insufficient_material()) {
+    el.textContent = 'Draw — insufficient material';
+    el.className = 'gameover';
+  } else if (game.in_draw()) {
+    el.textContent = 'Draw';
+    el.className = 'gameover';
+  } else if (thinking) {
+    el.textContent = 'Model is thinking…';
+    el.className = 'thinking';
+  } else {
+    var turn = game.turn() === 'w' ? 'White' : 'Black';
+    var who = modelTurn() ? 'model' : 'you';
+    el.textContent = turn + ' to move (' + who + ')';
+  }
+}
+
+function setError(msg) {
+  document.getElementById('error').textContent = msg || '';
+}
+
+function renderMoves() {
+  var hist = game.history();
+  if (hist.length === 0) {
+    document.getElementById('moves').textContent = '–';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < hist.length; i += 2) {
+    html += '<span class="num">' + (i / 2 + 1) + '.</span>';
+    html += '<span class="mv">' + hist[i] + '</span>';
+    if (hist[i + 1]) html += '<span class="mv">' + hist[i + 1] + '</span>';
+  }
+  var el = document.getElementById('moves');
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function highlightLastMove() {
+  $('#board .square-55d63').removeClass('highlight-last');
+  var hist = game.history({ verbose: true });
+  if (hist.length === 0) return;
+  var last = hist[hist.length - 1];
+  $('#board .square-' + last.from).addClass('highlight-last');
+  $('#board .square-' + last.to).addClass('highlight-last');
+}
+
+function updateEval(data) {
+  var v = data.value_white;
+  var sign = v >= 0 ? '+' : '';
+  var msign = data.material >= 0 ? '+' : '';
+  document.getElementById('eval').innerHTML =
+    'Position value (White): <b>' + sign + v.toFixed(2) + '</b> (range −1 to +1)<br>' +
+    'Predicted material (White − Black): <b>' + msign + data.material.toFixed(1) + '</b><br>' +
+    data.simulations + ' MCTS simulations in ' + (data.elapsed_ms / 1000).toFixed(1) + 's';
+}
+
+function movesUci() {
+  return game.history({ verbose: true }).map(function (m) {
+    return m.from + m.to + (m.promotion || '');
+  });
+}
+
+function requestModelMove() {
+  thinking = true;
+  setStatus();
+  fetch('/api/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ moves: movesUci() })
+  })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+    .then(function (res) {
+      thinking = false;
+      if (!res.ok || res.body.error) {
+        setError(res.body.error || 'Server error');
+        setStatus();
+        return;
+      }
+      var uci = res.body.move;
+      var mv = game.move({
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci.length > 4 ? uci.slice(4) : undefined
+      });
+      if (mv === null) {
+        setError('Model returned illegal move: ' + uci);
+        setStatus();
+        return;
+      }
+      board.position(game.fen());
+      highlightLastMove();
+      updateEval(res.body);
+      renderMoves();
+      setStatus();
+    })
+    .catch(function (err) {
+      thinking = false;
+      setError('Request failed: ' + err);
+      setStatus();
+    });
+}
+
+function onDragStart(source, piece) {
+  if (thinking || game.game_over()) return false;
+  if (modelTurn()) return false;
+  var mine = userColor() === 'white' ? 'w' : 'b';
+  if (piece.charAt(0) !== mine) return false;
+}
+
+function onDrop(source, target) {
+  var move = game.move({ from: source, to: target, promotion: 'q' });
+  if (move === null) return 'snapback';
+  setError('');
+  highlightLastMove();
+  renderMoves();
+  setStatus();
+  if (!game.game_over()) requestModelMove();
+}
+
+function onSnapEnd() {
+  board.position(game.fen());
+}
+
+function newGame() {
+  game = new Chess();
+  setError('');
+  board.orientation(userColor());
+  board.position('start', false);
+  document.getElementById('eval').textContent = 'No moves yet.';
+  $('#board .square-55d63').removeClass('highlight-last');
+  renderMoves();
+  setStatus();
+  if (userColor() === 'black') requestModelMove();
+}
+
+board = Chessboard('board', {
+  draggable: true,
+  position: 'start',
+  pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+  onDragStart: onDragStart,
+  onDrop: onDrop,
+  onSnapEnd: onSnapEnd
+});
+$(window).on('resize', function () { board.resize(); highlightLastMove(); });
+
+document.getElementById('new-game').addEventListener('click', newGame);
+
+fetch('/api/config')
+  .then(function (r) { return r.json(); })
+  .then(function (cfg) {
+    document.getElementById('checkpoint-name').textContent =
+      cfg.checkpoint + ' · ' + cfg.simulations + ' sims · temp ' + cfg.temperature;
+    document.getElementById('color-select').value = cfg.user_color;
+    newGame();
+  })
+  .catch(function (err) { setError('Could not load config: ' + err); });
+</script>
+</body>
+</html>

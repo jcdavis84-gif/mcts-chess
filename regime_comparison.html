@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Self-play vs BC vs BC+DPO — held-out metrics</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --series: #2a78d6;
+    --bc: #898781;
+    --border: rgba(11, 11, 11, 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --series: #3987e5;
+      --bc: #898781;
+      --border: rgba(255, 255, 255, 0.10);
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --series: #3987e5;
+    --bc: #898781;
+    --border: rgba(255, 255, 255, 0.10);
+  }
+  :root[data-theme="light"] {
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --series: #2a78d6;
+    --bc: #898781;
+    --border: rgba(11, 11, 11, 0.10);
+  }
+
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+    margin: 0;
+    padding: 48px 20px 64px;
+  }
+  .wrap { max-width: 840px; margin: 0 auto; }
+
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-size: 26px;
+    line-height: 1.25;
+    margin: 0 0 24px;
+    text-wrap: balance;
+  }
+
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 680px) {
+    .panels { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 16px 10px;
+  }
+  .panel h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 2px;
+  }
+  .panel .psub {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .chart-box { position: relative; }
+  .chart-box svg { display: block; width: 100%; height: auto; }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    color: var(--ink-2);
+    min-width: 150px;
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 2;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tooltip { transition: none; }
+  }
+  .tooltip strong { color: var(--ink); display: block; margin-bottom: 2px; }
+  .tooltip .row { display: flex; justify-content: space-between; gap: 16px; }
+  .tooltip .row span:last-child { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin-top: 28px;
+  }
+  caption {
+    text-align: left;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: 8px;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--ink-2);
+    border-bottom: 1px solid var(--axis);
+    padding: 6px 10px 6px 0;
+  }
+  td {
+    border-bottom: 1px solid var(--grid);
+    padding: 7px 10px 7px 0;
+    color: var(--ink-2);
+    vertical-align: top;
+  }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.model { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  .swatch {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    margin-right: 7px;
+    vertical-align: baseline;
+  }
+  tr.chance td { color: var(--muted); }
+  tr.chance td.model { color: var(--muted); font-weight: 500; }
+
+  .method {
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 70ch;
+  }
+  .method strong { color: var(--ink-2); font-weight: 600; }
+</style>
+
+<div class="wrap">
+  <h1>Training method comparison</h1>
+
+  <div class="panels">
+    <div class="panel">
+      <h2>Preference accuracy</h2>
+      <p class="psub">Ranks the better move above the worse one (as determined by Stockfish) · 929 held-out pairs</p>
+      <div class="chart-box">
+        <svg viewBox="0 0 330 280" role="img"
+             aria-label="Bar chart of preference accuracy: self-play 45.6 percent, BC 52.1 percent, BC plus DPO 72.4 percent, chance 50 percent.">
+          <!-- gridlines + y ticks -->
+          <line x1="42" x2="316" y1="187.5" y2="187.5" stroke="var(--grid)" stroke-width="1"/>
+          <line x1="42" x2="316" y1="135"   y2="135"   stroke="var(--grid)" stroke-width="1"/>
+          <line x1="42" x2="316" y1="82.5"  y2="82.5"  stroke="var(--grid)" stroke-width="1"/>
+          <line x1="42" x2="316" y1="30"    y2="30"    stroke="var(--grid)" stroke-width="1"/>
+          <text x="34" y="191.5" text-anchor="end" fill="var(--muted)" font-size="12" style="font-variant-numeric:tabular-nums">20%</text>
+          <text x="34" y="139"   text-anchor="end" fill="var(--muted)" font-size="12" style="font-variant-numeric:tabular-nums">40%</text>
+          <text x="34" y="86.5"  text-anchor="end" fill="var(--muted)" font-size="12" style="font-variant-numeric:tabular-nums">60%</text>
+          <text x="34" y="34"    text-anchor="end" fill="var(--muted)" font-size="12" style="font-variant-numeric:tabular-nums">80%</text>
+          <!-- chance reference (behind bars) -->
+          <line x1="42" x2="316" y1="108.8" y2="108.8" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="133.4" y="123.5" text-anchor="middle" fill="var(--muted)" font-size="12">chance 50%</text>
+          <!-- bars: 24px, rounded data-end, square base -->
+          <path fill="var(--bc)" d="M 75.7 240 L 75.7 124.3 Q 75.7 120.3 79.7 120.3 L 95.7 120.3 Q 99.7 120.3 99.7 124.3 L 99.7 240 Z"/>
+          <path fill="var(--bc)" d="M 167 240 L 167 107.2 Q 167 103.2 171 103.2 L 187 103.2 Q 191 103.2 191 107.2 L 191 240 Z"/>
+          <path fill="var(--series)" d="M 258.3 240 L 258.3 54 Q 258.3 50 262.3 50 L 278.3 50 Q 282.3 50 282.3 54 L 282.3 240 Z"/>
+          <!-- value labels (ink, not series color) -->
+          <text x="87.7"  y="112.3" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="600" style="font-variant-numeric:tabular-nums">45.6%</text>
+          <text x="179"   y="95.2"  text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="600" style="font-variant-numeric:tabular-nums">52.1%</text>
+          <text x="270.3" y="42"    text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="600" style="font-variant-numeric:tabular-nums">72.4%</text>
+          <!-- baseline -->
+          <line x1="42" x2="316" y1="240" y2="240" stroke="var(--axis)" stroke-width="1"/>
+          <!-- category labels -->
+          <text x="87.7"  y="258" text-anchor="middle" fill="var(--ink-2)" font-size="13">Self-play</text>
+          <text x="179"   y="258" text-anchor="middle" fill="var(--ink-2)" font-size="13">BC</text>
+          <text x="270.3" y="258" text-anchor="middle" fill="var(--ink-2)" font-size="13">BC + DPO</text>
+          <!-- hover hit targets -->
+          <rect class="hit" x="48" y="30" width="79" height="210" fill="transparent"
+                data-title="Self-play (from scratch)"
+                data-rows='[["Preference accuracy","424/929 (45.6%)"],["Log-prob margin","−0.32"],["vs chance","−4.4 pts"]]'/>
+          <rect class="hit" x="139.5" y="30" width="79" height="210" fill="transparent"
+                data-title="BC (behavioral cloning)"
+                data-rows='[["Preference accuracy","484/929 (52.1%)"],["Log-prob margin","+0.10"],["vs chance","+2.1 pts"]]'/>
+          <rect class="hit" x="231" y="30" width="79" height="210" fill="transparent"
+                data-title="BC + DPO (epoch 2)"
+                data-rows='[["Preference accuracy","673/929 (72.4%)"],["Log-prob margin","+9.70"],["vs chance","+22.4 pts"]]'/>
+        </svg>
+        <div class="tooltip"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Best-move match (top-1)</h2>
+      <p class="psub">Policy argmax equals best move (as determined by Stockfish) · 400 held-out positions</p>
+      <div class="chart-box">
+        <svg viewBox="0 0 330 280" role="img"
+             aria-label="Bar chart of top-1 match with Stockfish's best move: self-play 4.8 percent, BC 5.8 percent, BC plus DPO 9.3 percent, chance floor 4.9 percent.">
+          <!-- gridlines + y ticks -->
+          <line x1="42" x2="316" y1="187.5" y2="187.5" stroke="var(--grid)" stroke-width="1"/>
+          <line x1="42" x2="316" y1="135"   y2="135"   stroke="var(--grid)" stroke-width="1"/>
+          <line x1="42" x2="316" y1="82.5"  y2="82.5"  stroke="var(--grid)" stroke-width="1"/>
+          <line x1="42" x2="316" y1="30"    y2="30"    stroke="var(--grid)" stroke-width="1"/>
+          <text x="34" y="191.5" text-anchor="end" fill="var(--muted)" font-size="12" style="font-variant-numeric:tabular-nums">3%</text>
+          <text x="34" y="139"   text-anchor="end" fill="var(--muted)" font-size="12" style="font-variant-numeric:tabular-nums">6%</text>
+          <text x="34" y="86.5"  text-anchor="end" fill="var(--muted)" font-size="12" style="font-variant-numeric:tabular-nums">9%</text>
+          <text x="34" y="34"    text-anchor="end" fill="var(--muted)" font-size="12" style="font-variant-numeric:tabular-nums">12%</text>
+          <!-- chance reference (behind bars) -->
+          <line x1="42" x2="316" y1="154.6" y2="154.6" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="133.4" y="168" text-anchor="middle" fill="var(--muted)" font-size="12">chance 4.9%</text>
+          <!-- bars -->
+          <path fill="var(--bc)" d="M 75.7 240 L 75.7 160 Q 75.7 156 79.7 156 L 95.7 156 Q 99.7 156 99.7 160 L 99.7 240 Z"/>
+          <path fill="var(--bc)" d="M 167 240 L 167 143.4 Q 167 139.4 171 139.4 L 187 139.4 Q 191 139.4 191 143.4 L 191 240 Z"/>
+          <path fill="var(--series)" d="M 258.3 240 L 258.3 82.1 Q 258.3 78.1 262.3 78.1 L 278.3 78.1 Q 282.3 78.1 282.3 82.1 L 282.3 240 Z"/>
+          <!-- value labels -->
+          <text x="87.7"  y="148" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="600" style="font-variant-numeric:tabular-nums">4.8%</text>
+          <text x="179"   y="131.4" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="600" style="font-variant-numeric:tabular-nums">5.8%</text>
+          <text x="270.3" y="70.1" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="600" style="font-variant-numeric:tabular-nums">9.3%</text>
+          <!-- baseline -->
+          <line x1="42" x2="316" y1="240" y2="240" stroke="var(--axis)" stroke-width="1"/>
+          <!-- category labels -->
+          <text x="87.7"  y="258" text-anchor="middle" fill="var(--ink-2)" font-size="13">Self-play</text>
+          <text x="179"   y="258" text-anchor="middle" fill="var(--ink-2)" font-size="13">BC</text>
+          <text x="270.3" y="258" text-anchor="middle" fill="var(--ink-2)" font-size="13">BC + DPO</text>
+          <!-- hover hit targets -->
+          <rect class="hit" x="48" y="30" width="79" height="210" fill="transparent"
+                data-title="Self-play (from scratch)"
+                data-rows='[["Top-1 match","19/400 (4.8%)"],["Top-5 match","18.0%"],["vs chance","−0.2 pts"]]'/>
+          <rect class="hit" x="139.5" y="30" width="79" height="210" fill="transparent"
+                data-title="BC (behavioral cloning)"
+                data-rows='[["Top-1 match","23/400 (5.8%)"],["Top-5 match","23.5%"],["vs chance","+0.9 pts"]]'/>
+          <rect class="hit" x="231" y="30" width="79" height="210" fill="transparent"
+                data-title="BC + DPO (epoch 2)"
+                data-rows='[["Top-1 match","37/400 (9.3%)"],["Top-5 match","31.0%"],["vs chance","+4.4 pts"]]'/>
+        </svg>
+        <div class="tooltip"></div>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th class="num">Preference accuracy</th>
+        <th class="num">Top-1 match</th>
+        <th class="num">Top-5 match</th>
+        <th>Training</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="chance">
+        <td class="model">Chance</td>
+        <td class="num">50%</td>
+        <td class="num">4.9%</td>
+        <td class="num">~24%</td>
+        <td>Random pair ranking / uniform-random legal move</td>
+      </tr>
+      <tr>
+        <td class="model"><span class="swatch" style="background:var(--bc)"></span>Self-play</td>
+        <td class="num">45.6% <span style="color:var(--muted)">(424/929)</span></td>
+        <td class="num">4.8% <span style="color:var(--muted)">(19/400)</span></td>
+        <td class="num">18.0%</td>
+        <td>400 self-play games, 20 MCTS sims/move</td>
+      </tr>
+      <tr>
+        <td class="model"><span class="swatch" style="background:var(--bc)"></span>BC</td>
+        <td class="num">52.1% <span style="color:var(--muted)">(484/929)</span></td>
+        <td class="num">5.8% <span style="color:var(--muted)">(23/400)</span></td>
+        <td class="num">23.5%</td>
+        <td>6,000 steps imitating 6,200 Kasparov / Karpov / Capablanca games</td>
+      </tr>
+      <tr>
+        <td class="model"><span class="swatch" style="background:var(--series)"></span>BC + DPO</td>
+        <td class="num">72.4% <span style="color:var(--muted)">(673/929)</span></td>
+        <td class="num">9.3% <span style="color:var(--muted)">(37/400)</span></td>
+        <td class="num">31.0%</td>
+        <td>BC, then DPO (epoch 2) on 9,294 Stockfish-ranked preference pairs</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  // Enhancement only — the chart above is static SVG and renders without JS.
+  document.querySelectorAll(".chart-box").forEach((box) => {
+    const tip = box.querySelector(".tooltip");
+    box.querySelectorAll(".hit").forEach((hit) => {
+      hit.addEventListener("mousemove", (ev) => {
+        const rows = JSON.parse(hit.dataset.rows);
+        tip.innerHTML =
+          "<strong>" + hit.dataset.title + "</strong>" +
+          rows.map((r) => '<div class="row"><span>' + r[0] + "</span><span>" + r[1] + "</span></div>").join("");
+        const bb = box.getBoundingClientRect();
+        let tx = ev.clientX - bb.left + 14;
+        const ty = ev.clientY - bb.top - 10;
+        tip.style.opacity = 1;
+        const tw = tip.offsetWidth;
+        if (tx + tw > bb.width - 4) tx = ev.clientX - bb.left - tw - 14;
+        tip.style.left = tx + "px";
+        tip.style.top = ty + "px";
+      });
+      hit.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+    });
+  });
+</script>
+</html>
