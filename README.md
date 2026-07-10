@@ -42,7 +42,7 @@ In order to speed things up for this small implementation, I introduced some alt
 
 ## Results
 
-On this small scale, none of the training approaches led to strong play in the absolute sense: no checkpoint was able to beat Stockfish on its weakest setting, even with running 2000 tree searches per position. In particular, self-play led to outcomes that were no better than chance, probably due to the fact that many rounds of training are required for the influence of decisive positions to trickle down to the V and policy heads.
+On this small scale, none of the training approaches led to strong play in the absolute sense: no checkpoint was able to beat Stockfish even at skill level 0, even with running 2000 tree searches per position. In particular, self-play led to outcomes that were no better than chance, probably due to the fact that many rounds of training are required for the influence of decisive positions to trickle down to the V and policy heads.
 
 Behavioral cloning and DPO did create meaningful improvement in the ability of the networks to distinguish relatively better moves from worse ones and also the probability of finding the overall best move in the position (as determined by Stockfish on its strongest setting). These metrics are shown in the below chart.
 
@@ -60,27 +60,48 @@ pip install -r requirements.txt
 brew install stockfish
 ```
 
+Stockfish is only needed for evaluation and DPO pair generation, not for training. On Linux, install it with your package manager instead of Homebrew.
+
 Build the expert-games buffer from PGN files:
 
 ```bash
 python bc/prepare_expert_games.py --pgn-file bc/Kasparov.pgn bc/Karpov.pgn bc/Capablanca.pgn --train-games 6200 --eval-games 20 --prefix top_players
 ```
 
-Create self-play games and train on them:
+Conduct training on master games:
 
 ```bash
 python train.py --load-buffer top_players_train.pkl --cycles 10 --train-steps-per-cycle 1000 --batch-size 256 --learning-rate 2e-4 --d-model 128 --num-blocks 4 --num-heads 2 --d-policy 64 --checkpoint-interval 2 --log-training-steps
 ```
 
+Create self-play games and train on them:
+
+```bash
+python train.py --cycles 10 --train-steps-per-cycle 1000 --batch-size 256 --learning-rate 2e-4 --d-model 128 --num-blocks 4 --num-heads 2 --d-policy 64 --checkpoint-interval 2 --log-training-steps
+```
+
+Generate DPO preference pairs from master games and fine-tune a checkpoint on them (pass `--stockfish-path` if Stockfish is not at `/opt/homebrew/bin/stockfish`):
+
+```bash
+python dpo/generate_dpo_pairs.py --pgn-file bc/Kasparov.pgn --num-games 100 --model <checkpoint> --output dpo_pairs.pkl
+python dpo/train_dpo.py --pairs dpo_pairs.pkl --model <checkpoint> --output model_dpo.pt
+```
+
+Compare checkpoints on held-out preference pairs (the metrics shown in the chart above):
+
+```bash
+python dpo/eval_preference_accuracy.py --pairs dpo_pairs.pkl --checkpoint bc=<checkpoint> --checkpoint dpo=model_dpo.pt
+```
+
 Test a checkpoint in a head-to-head game against Stockfish:
 
 ```bash
-python tests/test_elo.py --checkpoint checkpoints/model_final.pt --simulations 10000 --skill-level 1 --num-games 1
+python tests/test_elo.py --checkpoint <checkpoint> --simulations 2000 --skill-level 1 --num-games 1
 ```
 
 Play a game against a checkpoint in the browser (human vs. network):
 
 ```bash
-python play.py --checkpoint checkpoints/model_final.pt
-python play.py --checkpoint model_latest.pt --color black --simulations 200
+python play.py --checkpoint <checkpoint>
+python play.py --checkpoint <checkpoint> --color black --simulations 200
 ```
